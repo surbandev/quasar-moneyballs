@@ -1,53 +1,93 @@
 <template>
-  <q-layout view="hHh lpR lFf">
-    <q-header elevated>
-      <q-toolbar>
-        <q-btn flat dense round icon="menu" aria-label="Menu" @click="toggleLeftDrawer" />
-
-        <q-toolbar-title class="text-bold">
-          <div class="absolute-center">
-            <q-icon name="savings" />
-            Moneyballs 
-          </div>
-        </q-toolbar-title>
-
-      </q-toolbar>
-    </q-header>
-
-    <q-drawer class="bg-primary" v-model="leftDrawerOpen" :breakpoint="767" :width="250" show-if-above bordered>
-      <q-list>
-        <q-item-label header class="text-white"> Navigation </q-item-label>
-
-        <NavLink v-for="link in navLinks" :key="link.title" v-bind="link" />
-      </q-list>
-    </q-drawer>
-
+  <q-layout view="lHh lpR fFf">
     <q-page-container>
       <router-view />
     </q-page-container>
+
+    <q-footer class="bg-dark text-white">
+      <q-tabs
+        v-model="currentTab"
+        class="text-grey-5"
+        active-color="primary"
+        indicator-color="transparent"
+      >
+        <q-route-tab
+          name="overview"
+          icon="visibility"
+          label="Overview"
+          to="/"
+          exact
+        />
+        <q-route-tab
+          name="budget"
+          icon="donut_large"
+          label="Budget"
+          to="/categories"
+        />
+        <q-route-tab
+          name="save"
+          icon="favorite"
+          label="Save"
+          to="/entries"
+        />
+        <q-route-tab
+          name="tools"
+          icon="work"
+          label="Tools"
+          to="/settings"
+        />
+      </q-tabs>
+    </q-footer>
   </q-layout>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import NavLink from 'components/Nav/NavLink.vue'
+import { ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 
-const navLinks = [
-  {
-    title: 'Entries',
-    icon: 'savings',
-    link: '/',
+const route = useRoute()
+const currentTab = ref('overview')
+
+// Update current tab based on route
+watch(
+  () => route.path,
+  (newPath) => {
+    if (newPath === '/') {
+      currentTab.value = 'overview'
+    } else if (newPath === '/categories') {
+      currentTab.value = 'budget'
+    } else if (newPath === '/entries') {
+      currentTab.value = 'save'
+    } else if (newPath === '/settings') {
+      currentTab.value = 'tools'
+    }
   },
-  {
-    title: 'Settings',
-    icon: 'settings',
-    link: '/settings',
-  }
-]
-
-const leftDrawerOpen = ref(false)
-
-function toggleLeftDrawer() {
-  leftDrawerOpen.value = !leftDrawerOpen.value
-}
+  { immediate: true }
+)
 </script>
+
+<style scoped>
+.q-footer {
+  background: #2a2a2a !important;
+  border-top: 1px solid #3a3a3a;
+  padding: 8px 0;
+}
+
+:deep(.q-tabs) {
+  min-height: 60px;
+}
+
+:deep(.q-tab) {
+  padding: 8px 12px;
+  min-height: 56px;
+}
+
+:deep(.q-tab__label) {
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+:deep(.q-tab__icon) {
+  font-size: 24px;
+}
+</style>

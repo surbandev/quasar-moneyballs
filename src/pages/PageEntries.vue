@@ -1,6 +1,6 @@
 <template>
-  <div class="q-pa-md">
-    <q-list bordered separator>
+  <div class="page-entries">
+    <q-list class="transactions-list q-mx-md" bordered separator>
       <q-slide-item
         v-for="entry in entries"
         right-color="negative"
@@ -63,37 +63,16 @@
 import { ref, reactive, computed } from 'vue'
 import { currencyFormat, useAmountColorClass } from 'src/js/utils'
 import { uid, useQuasar } from 'quasar'
+import { useTransactionsStore } from 'src/stores/transactions'
 
 const $q = useQuasar()
+const transactionsStore = useTransactionsStore()
 
-const entries = ref([
-  {
-    id: 'id1',
-    name: 'Salary',
-    amount: 4999.99,
-  },
-  {
-    id: 'id2',
-    name: 'Rent',
-    amount: -999.99,
-  },
-  {
-    id: 'id3',
-    name: 'Phone',
-    amount: -251.53,
-  },
-  {
-    id: 'id4',
-    name: 'Unknown',
-    amount: 0,
-  },
-])
+// Use store data
+const entries = computed(() => transactionsStore.sortedTransactions)
+const balance = computed(() => transactionsStore.balance)
 
 const nameRef = ref(null)
-
-const balance = computed(() => {
-  return entries.value.reduce((acc, entry) => acc + entry.amount, 0)
-})
 
 const addEntryFormInitialState = {
   name: '',
@@ -110,8 +89,13 @@ const addEntryFormReset = () => {
 }
 
 const addEntry = () => {
-  const newEntry = Object.assign({}, addEntryForm, { id: uid() })
-  entries.value.push(newEntry)
+  const newEntry = {
+    id: uid(),
+    name: addEntryForm.name,
+    amount: addEntryForm.amount,
+    date: new Date(),
+  }
+  transactionsStore.addTransaction(newEntry)
   addEntryFormReset()
 }
 
@@ -146,8 +130,7 @@ const onEntrySlideRight = ({ reset }, entry) => {
 }
 
 const deleteEntry = (entryId) => {
-  const index = entries.value.findIndex((e) => e.id === entryId)
-  entries.value.splice(index, 1)
+  transactionsStore.deleteTransaction(entryId)
   $q.notify({
     message: 'Entry deleted',
     color: 'positive',
@@ -156,3 +139,31 @@ const deleteEntry = (entryId) => {
   })
 }
 </script>
+
+<style scoped>
+.page-entries {
+  background: #1a1a1a;
+  min-height: 100vh;
+  padding-top: 16px;
+  padding-bottom: 140px;
+}
+
+.transactions-list {
+  background: #2a2a2a;
+  border-radius: 12px;
+  border: 1px solid #3a3a3a;
+}
+
+:deep(.q-item) {
+  background: #2a2a2a;
+  color: white;
+}
+
+:deep(.q-item:hover) {
+  background: #3a3a3a;
+}
+
+:deep(.q-separator) {
+  background: #3a3a3a;
+}
+</style>
