@@ -209,14 +209,15 @@
                 color="negative"
                 @click="removeEvent"
                 no-caps
+                unelevated
               />
-              <q-space />
               <q-btn
                 type="submit"
                 :label="currentEvent ? 'Update' : 'Save'"
                 color="primary"
                 :loading="isSaving"
                 no-caps
+                unelevated
               />
             </div>
           </q-form>
@@ -233,8 +234,7 @@ import { useQuasar } from 'quasar'
 import { useScenariosStore } from '../stores/scenarios'
 import { useEventsStore } from '../stores/events'
 import { useProfileStore } from '../stores/profile'
-import axios from 'axios'
-import { getAPIURL } from '../js/api'
+import { useConstantsStore } from '../stores/constants'
 
 const router = useRouter()
 const route = useRoute()
@@ -242,6 +242,7 @@ const $q = useQuasar()
 const scenariosStore = useScenariosStore()
 const eventsStore = useEventsStore()
 const profileStore = useProfileStore()
+const constantsStore = useConstantsStore()
 
 const isLoadingEvent = ref(false)
 const isSaving = ref(false)
@@ -266,72 +267,10 @@ const newEvent = ref({
   active: true,
 })
 
-const categoryOptions = [
-  { label: 'Mortgage', value: 'MORTGAGE' },
-  { label: 'Rent', value: 'RENT' },
-  { label: 'Grocery', value: 'GROCERY' },
-  { label: 'Dining', value: 'DINING' },
-  { label: 'Entertainment', value: 'ENTERTAINMENT' },
-  { label: 'Utilities', value: 'UTILITY' },
-  { label: 'Subscription', value: 'SUBSCRIPTION' },
-  { label: 'Insurance', value: 'INSURANCE' },
-  { label: 'Generic Loan', value: 'GENERIC_LOAN' },
-  { label: 'Auto Loan', value: 'AUTO_LOAN' },
-  { label: 'Credit Card', value: 'CREDIT_CARD' },
-  { label: 'Phone', value: 'PHONE' },
-  { label: 'Savings', value: 'SAVINGS' },
-  { label: 'Primary Income', value: 'PRIMARY_INCOME' },
-  { label: 'Secondary Income', value: 'SECONDARY_INCOME' },
-  { label: 'Misc Income', value: 'MISC' },
-]
-
-const frequencyOptions = [
-  { label: 'Once', value: 'ONCE' },
-  { label: 'Daily', value: 'DAILY' },
-  { label: 'Weekly', value: 'WEEKLY' },
-  { label: 'Every Other Week', value: 'EVERY_OTHER_WEEK' },
-  { label: 'Monthly', value: 'MONTHLY' },
-  { label: 'Every Other Month', value: 'EVERY_OTHER_MONTH' },
-  { label: 'Yearly', value: 'YEARLY' },
-]
-
-const typeOptions = [
-  { label: 'Income', value: 'CREDIT' },
-  { label: 'Expense', value: 'DEBIT' },
-]
-
-const loanTermOptions = [
-  { label: '12 months (1 year)', value: '12' },
-  { label: '24 months (2 years)', value: '24' },
-  { label: '36 months (3 years)', value: '36' },
-  { label: '48 months (4 years)', value: '48' },
-  { label: '60 months (5 years)', value: '60' },
-  { label: '72 months (6 years)', value: '72' },
-  { label: '84 months (7 years)', value: '84' },
-  { label: '96 months (8 years)', value: '96' },
-  { label: '108 months (9 years)', value: '108' },
-  { label: '120 months (10 years)', value: '120' },
-  { label: '132 months (11 years)', value: '132' },
-  { label: '144 months (12 years)', value: '144' },
-  { label: '156 months (13 years)', value: '156' },
-  { label: '168 months (14 years)', value: '168' },
-  { label: '180 months (15 years)', value: '180' },
-  { label: '192 months (16 years)', value: '192' },
-  { label: '204 months (17 years)', value: '204' },
-  { label: '216 months (18 years)', value: '216' },
-  { label: '228 months (19 years)', value: '228' },
-  { label: '240 months (20 years)', value: '240' },
-  { label: '252 months (21 years)', value: '252' },
-  { label: '264 months (22 years)', value: '264' },
-  { label: '276 months (23 years)', value: '276' },
-  { label: '288 months (24 years)', value: '288' },
-  { label: '300 months (25 years)', value: '300' },
-  { label: '312 months (26 years)', value: '312' },
-  { label: '324 months (27 years)', value: '324' },
-  { label: '336 months (28 years)', value: '336' },
-  { label: '348 months (29 years)', value: '348' },
-  { label: '360 months (30 years)', value: '360' },
-]
+const categoryOptions = computed(() => constantsStore.getCategoryOptions)
+const frequencyOptions = computed(() => constantsStore.getFrequencyOptions)
+const typeOptions = computed(() => constantsStore.getTypeOptions)
+const loanTermOptions = computed(() => constantsStore.getLoanTermOptions)
 
 const scenarioOptions = computed(() => {
   return scenariosStore.allScenarios.map((s) => ({
@@ -341,8 +280,7 @@ const scenarioOptions = computed(() => {
 })
 
 const isLoanCategory = computed(() => {
-  const loanCategories = ['MORTGAGE', 'AUTO_LOAN', 'GENERIC_LOAN']
-  return loanCategories.includes(newEvent.value.category)
+  return constantsStore.isLoanCategory(newEvent.value.category)
 })
 
 const isMortgageCategory = computed(() => {
@@ -387,9 +325,7 @@ function loadCurrentEventData() {
         : new Date().toISOString().split('T')[0],
       endDate: currentEvent.value.end_date
         ? new Date(currentEvent.value.end_date).toISOString().split('T')[0]
-        : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
-            .toISOString()
-            .split('T')[0],
+        : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       amount: currentEvent.value.amount || null,
       active: currentEvent.value.active !== undefined ? currentEvent.value.active : true,
       profileID: currentEvent.value.profile_id || currentEvent.value.profileID || '',
@@ -460,8 +396,7 @@ async function saveEvent() {
     const eventID = currentEvent.value ? currentEvent.value.id : null
 
     if (eventID) {
-      // Updating existing event - build clean payload matching backend expectations
-      // Note: DAL function uses defaults (?? 0 or ?? ''), so we can send 0/'' instead of null
+      // Updating existing event
       const updatePayload = {
         eventID: eventID,
         profileID: newEvent.value.profileID,
@@ -474,93 +409,50 @@ async function saveEvent() {
         startDate: formattedStartDate,
         endDate: formattedEndDate,
         amount: parseFloat(newEvent.value.amount),
-        active: newEvent.value.active !== undefined ? newEvent.value.active : true,
-        principal:
-          newEvent.value.principal === '' || newEvent.value.principal === null
-            ? 0
-            : parseFloat(newEvent.value.principal),
-        interest:
-          newEvent.value.interest === '' || newEvent.value.interest === null
-            ? 0
-            : parseFloat(newEvent.value.interest),
-        calculatedEndDate: formattedEndDate || '', // For now, use endDate. Could be calculated for loans
-        monthlyPayment:
-          newEvent.value.monthlyAmount === '' ||
-          newEvent.value.monthlyAmount === null
-            ? 0
-            : parseFloat(newEvent.value.monthlyAmount),
-        escrow:
-          newEvent.value.escrow === '' || newEvent.value.escrow === null
-            ? 0
-            : parseFloat(newEvent.value.escrow),
+        active: newEvent.value.active ?? true,
+        principal: newEvent.value.principal ? parseFloat(newEvent.value.principal) : 0,
+        interest: newEvent.value.interest ? parseFloat(newEvent.value.interest) : 0,
+        calculatedEndDate: formattedEndDate,
+        monthlyPayment: newEvent.value.monthlyAmount ? parseFloat(newEvent.value.monthlyAmount) : 0,
+        escrow: newEvent.value.escrow ? parseFloat(newEvent.value.escrow) : 0,
+        term: newEvent.value.loanTerm ? parseInt(newEvent.value.loanTerm) : 0,
       }
 
-      // Only include term if it has a valid value (update uses 'term', not 'loanTerm')
-      // If not included, DAL will default to 0
-      if (newEvent.value.loanTerm && newEvent.value.loanTerm !== '' && newEvent.value.loanTerm !== null) {
-        updatePayload.term = parseInt(newEvent.value.loanTerm)
-      } else {
-        updatePayload.term = 0
-      }
-
-      await axios.put(`${getAPIURL()}/api/scenario/update-event`, updatePayload)
-
-      // Refresh events after update
-      await eventsStore.fetchEvents()
-      await eventsStore.fetchEventsForMonthByScenario()
+      await eventsStore.updateEvent(eventID, updatePayload)
       $q.notify({
         type: 'positive',
         message: 'Transaction updated successfully',
         position: 'top',
       })
     } else {
-      // Creating new event - build clean payload matching backend expectations
-      // Note: DAL function uses defaults (?? 0 or ?? ''), so we can send 0/'' instead of null
+      // Creating new event - explicitly set ALL 18 fields, use null for empty values (matching original app)
       const createPayload = {
+        active: newEvent.value.active ?? true,
+        amount: parseFloat(newEvent.value.amount),
+        calculatedEndDate: formattedEndDate,
+        category: newEvent.value.category,
+        description: newEvent.value.description || '',
+        endDate: formattedEndDate,
+        escrow: newEvent.value.escrow ? parseFloat(newEvent.value.escrow) : null,
+        frequency: newEvent.value.frequency,
+        interest: newEvent.value.interest ? parseFloat(newEvent.value.interest) : null,
+        loanTerm: newEvent.value.loanTerm ? parseInt(newEvent.value.loanTerm) : null,
+        monthlyAmount: newEvent.value.monthlyAmount ? String(newEvent.value.monthlyAmount) : '',
+        monthlyPayment: newEvent.value.monthlyAmount
+          ? parseFloat(newEvent.value.monthlyAmount)
+          : null,
+        name: newEvent.value.name,
+        principal: newEvent.value.principal ? parseFloat(newEvent.value.principal) : null,
         profileID: newEvent.value.profileID,
         scenarioID: newEvent.value.scenarioID,
-        name: newEvent.value.name,
-        description: newEvent.value.description || '',
-        type: newEvent.value.type,
-        category: newEvent.value.category,
-        frequency: newEvent.value.frequency,
         startDate: formattedStartDate,
-        endDate: formattedEndDate,
-        amount: parseFloat(newEvent.value.amount),
-        active: newEvent.value.active !== undefined ? newEvent.value.active : true,
-        principal:
-          newEvent.value.principal === '' || newEvent.value.principal === null
-            ? 0
-            : parseFloat(newEvent.value.principal),
-        interest:
-          newEvent.value.interest === '' || newEvent.value.interest === null
-            ? 0
-            : parseFloat(newEvent.value.interest),
-        calculatedEndDate: formattedEndDate || '', // For now, use endDate. Could be calculated for loans
-        monthlyPayment:
-          newEvent.value.monthlyAmount === '' ||
-          newEvent.value.monthlyAmount === null
-            ? 0
-            : parseFloat(newEvent.value.monthlyAmount),
-        escrow:
-          newEvent.value.escrow === '' || newEvent.value.escrow === null
-            ? 0
-            : parseFloat(newEvent.value.escrow),
+        type: newEvent.value.type,
       }
 
-      // Only include loanTerm if it has a valid value (create uses 'loanTerm', not 'term')
-      // If not included, DAL will default to 0
-      if (newEvent.value.loanTerm && newEvent.value.loanTerm !== '' && newEvent.value.loanTerm !== null) {
-        createPayload.loanTerm = parseInt(newEvent.value.loanTerm)
-      } else {
-        createPayload.loanTerm = 0
-      }
-
-      await axios.post(`${getAPIURL()}/api/scenario/create-event`, createPayload)
-
-      // Refresh events after create
-      await eventsStore.fetchEvents()
-      await eventsStore.fetchEventsForMonthByScenario()
+      console.log('=== PageTransaction createPayload ===')
+      console.log('Keys:', Object.keys(createPayload).length, 'fields')
+      console.log('Payload:', JSON.stringify(createPayload, null, 2))
+      await eventsStore.createEvent(createPayload)
       $q.notify({
         type: 'positive',
         message: 'Transaction created successfully',
@@ -587,9 +479,16 @@ async function removeEvent() {
     message: 'Are you sure you want to delete this transaction?',
     cancel: true,
     persistent: true,
+    class: 'dark-dialog',
+    style: 'background: rgba(30, 30, 35, 0.98); color: white;',
   }).onOk(async () => {
     try {
-      await eventsStore.deleteEvent(currentEvent.value.id)
+      // Try both id and _id in case the event uses different ID field
+      const eventId = currentEvent.value?.id || currentEvent.value?._id
+      if (!eventId) {
+        throw new Error('Event ID not found')
+      }
+      await eventsStore.deleteEvent(eventId)
       $q.notify({
         type: 'positive',
         message: 'Transaction deleted successfully',
@@ -600,7 +499,7 @@ async function removeEvent() {
       console.error('Error deleting event:', error)
       $q.notify({
         type: 'negative',
-        message: 'Failed to delete transaction',
+        message: error.message || 'Failed to delete transaction',
         position: 'top',
       })
     }
@@ -837,30 +736,39 @@ watch(
   border-top: 1px solid rgba(168, 85, 247, 0.2);
 
   :deep(.q-btn) {
+    flex: 1;
     padding: 0.75rem 1.5rem;
     font-size: 1rem;
     font-weight: 600;
+    letter-spacing: 1px;
     border-radius: 12px;
     transition: all 0.3s ease;
 
     &[color='primary'] {
-      background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
 
-      &:hover {
-        background: linear-gradient(135deg, #9333ea 0%, #6d28d9 100%);
+      &:hover:not(:disabled) {
         transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(168, 85, 247, 0.4);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+      }
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
       }
     }
 
     &[color='negative'] {
-      background: rgba(239, 68, 68, 0.1);
-      color: #ef4444;
-      border: 2px solid rgba(239, 68, 68, 0.3);
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      color: white;
 
       &:hover {
-        background: rgba(239, 68, 68, 0.2);
-        border-color: rgba(239, 68, 68, 0.5);
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.5);
+        transform: translateY(-2px);
       }
     }
   }
@@ -933,6 +841,119 @@ watch(
 
     :deep(.q-btn) {
       width: 100%;
+    }
+  }
+}
+</style>
+
+<style lang="scss">
+// Global styles for delete confirmation dialog
+:deep(.q-dialog) {
+  .q-dialog__inner {
+    .q-card {
+      background: rgba(30, 30, 35, 0.98) !important;
+      backdrop-filter: blur(20px) !important;
+      border: 2px solid rgba(255, 255, 255, 0.2) !important;
+      border-radius: 16px !important;
+      color: white !important;
+      padding: 2rem !important;
+      min-width: 400px;
+      max-width: 500px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+
+      .q-card__section {
+        color: white !important;
+        padding: 0 !important;
+
+        &:first-child {
+          padding-bottom: 1rem !important;
+          margin-bottom: 1rem !important;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+      }
+
+      .q-dialog__title {
+        color: white !important;
+        font-size: 1.5rem !important;
+        font-weight: 600 !important;
+        margin: 0 0 1rem 0 !important;
+      }
+
+      .q-dialog__message {
+        color: rgba(255, 255, 255, 0.9) !important;
+        font-size: 1rem !important;
+        line-height: 1.5 !important;
+        margin-bottom: 1.5rem !important;
+      }
+
+      .q-dialog__actions {
+        display: flex !important;
+        gap: 1rem !important;
+        justify-content: flex-end !important;
+        padding-top: 1rem !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+
+        .q-btn {
+          padding: 0.75rem 1.5rem !important;
+          border-radius: 12px !important;
+          font-size: 1rem !important;
+          font-weight: 500 !important;
+          transition: all 0.3s ease !important;
+          min-width: 100px !important;
+
+          &.q-btn--flat {
+            background: rgba(255, 255, 255, 0.1) !important;
+            border: 2px solid rgba(255, 255, 255, 0.3) !important;
+            color: white !important;
+
+            &:hover {
+              background: rgba(255, 255, 255, 0.15) !important;
+              border-color: rgba(255, 255, 255, 0.5) !important;
+              transform: translateY(-2px) !important;
+            }
+          }
+
+          &:not(.q-btn--flat) {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            border: none !important;
+            color: white !important;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3) !important;
+
+            &:hover {
+              transform: translateY(-3px) !important;
+              box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4) !important;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  :deep(.q-dialog) {
+    .q-dialog__inner {
+      .q-card {
+        min-width: 90vw !important;
+        max-width: 90vw !important;
+        padding: 1.5rem !important;
+
+        .q-dialog__title {
+          font-size: 1.25rem !important;
+        }
+
+        .q-dialog__message {
+          font-size: 0.95rem !important;
+        }
+
+        .q-dialog__actions {
+          flex-direction: column-reverse !important;
+
+          .q-btn {
+            width: 100% !important;
+          }
+        }
+      }
     }
   }
 }

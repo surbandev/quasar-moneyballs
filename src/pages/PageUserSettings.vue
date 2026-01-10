@@ -184,6 +184,8 @@
             <q-select
               v-model="userSettings.theme"
               :options="themeOptions"
+              option-label="label"
+              option-value="value"
               class="form-input theme-select"
               borderless
               dense
@@ -218,14 +220,16 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import axios from 'axios'
-import { getAPIURL } from '../js/api'
+import { useAuthStore } from '../stores/auth'
+import { useConstantsStore } from '../stores/constants'
 
 const router = useRouter()
 const $q = useQuasar()
+const authStore = useAuthStore()
+const constantsStore = useConstantsStore()
 
 const isSaving = ref(false)
 const isLoading = ref(false)
@@ -244,37 +248,22 @@ const userSettings = ref({
   subscriptionLevel: 'basic',
 })
 
-const themeOptions = [
-  { label: 'Dark', value: 'dark' },
-  { label: 'Light', value: 'light' },
-]
+const themeOptions = computed(() => constantsStore.getThemeOptions)
 
 async function loadUserSettings() {
   isLoading.value = true
   try {
-    const token = localStorage.getItem('token')
-    const userID = localStorage.getItem('userID')
+    const userID = authStore.getUserID
 
-    if (!token || !userID) {
+    if (!authStore.isAuthenticated || !userID) {
       router.push('/login')
       return
     }
 
-    const config = {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
+    const userResponse = await authStore.fetchUser(userID)
 
-    // Fetch user data - using GET with query parameter like original app
-    // Note: Backend may need to read from req.query instead of req.body for GET requests
-    const userResponse = await axios.get(
-      `${getAPIURL()}/api/user/get-user?userID=${userID}`,
-      config
-    )
-
-    if (userResponse.data?.user) {
-      const user = userResponse.data.user
+    if (userResponse?.user) {
+      const user = userResponse.user
       userSettings.value.username = user.username || ''
       userSettings.value.email = user.email || ''
       userSettings.value.subscriptionLevel = user.subscriptionLevel || 'basic'
@@ -298,10 +287,9 @@ async function loadUserSettings() {
 async function saveSettings() {
   isSaving.value = true
   try {
-    const token = localStorage.getItem('token')
-    const userID = localStorage.getItem('userID')
+    const userID = authStore.getUserID
 
-    if (!token || !userID) {
+    if (!authStore.isAuthenticated || !userID) {
       router.push('/login')
       return
     }
@@ -328,21 +316,14 @@ async function saveSettings() {
       return
     }
 
-    const config = {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    }
-
     const updateData = {
-      userID: userID,
       username: userSettings.value.username,
       password: userSettings.value.newPassword,
       email: userSettings.value.email,
       subscriptionLevel: userSettings.value.subscriptionLevel,
     }
 
-    await axios.put(`${getAPIURL()}/api/user/update-user`, updateData, config)
+    await authStore.updateUser(userID, updateData)
 
     // Clear password fields after successful update
     userSettings.value.newPassword = ''

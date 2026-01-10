@@ -35,11 +35,23 @@
                       :options="monthOptions"
                       option-label="label"
                       option-value="value"
+                      emit-value
+                      map-options
+                      display-value=""
                       label="Month"
                       outlined
                       dense
+                      dark
                       @update:model-value="updateFilteredData"
-                    />
+                    >
+                      <template v-slot:selected>
+                        <span v-if="startMonth">
+                          {{
+                            monthOptions.find((m) => m.value === startMonth)?.label || startMonth
+                          }}
+                        </span>
+                      </template>
+                    </q-select>
                   </div>
                   <div class="col-4">
                     <q-select
@@ -48,6 +60,7 @@
                       label="Day"
                       outlined
                       dense
+                      dark
                       @update:model-value="updateFilteredData"
                     />
                   </div>
@@ -58,6 +71,7 @@
                       label="Year"
                       outlined
                       dense
+                      dark
                       @update:model-value="updateFilteredData"
                     />
                   </div>
@@ -73,11 +87,21 @@
                       :options="monthOptions"
                       option-label="label"
                       option-value="value"
+                      emit-value
+                      map-options
+                      display-value=""
                       label="Month"
                       outlined
                       dense
+                      dark
                       @update:model-value="updateFilteredData"
-                    />
+                    >
+                      <template v-slot:selected>
+                        <span v-if="endMonth">
+                          {{ monthOptions.find((m) => m.value === endMonth)?.label || endMonth }}
+                        </span>
+                      </template>
+                    </q-select>
                   </div>
                   <div class="col-4">
                     <q-select
@@ -86,6 +110,7 @@
                       label="Day"
                       outlined
                       dense
+                      dark
                       @update:model-value="updateFilteredData"
                     />
                   </div>
@@ -96,6 +121,7 @@
                       label="Year"
                       outlined
                       dense
+                      dark
                       @update:model-value="updateFilteredData"
                     />
                   </div>
@@ -116,15 +142,15 @@ import { useQuasar } from 'quasar'
 import { useProfileStore } from '../stores/profile'
 import { useScenariosStore } from '../stores/scenarios'
 import { useEventsStore } from '../stores/events'
+import { useConstantsStore } from '../stores/constants'
 import SpentThisMonthChart from '../components/SpentThisMonthChart.vue'
-import axios from 'axios'
-import { getAPIURL } from '../js/api'
 
 const router = useRouter()
 const $q = useQuasar()
 const profileStore = useProfileStore()
 const scenariosStore = useScenariosStore()
 const eventsStore = useEventsStore()
+const constantsStore = useConstantsStore()
 
 const loading = ref(false)
 const activeScenarios = ref(new Set(['default']))
@@ -137,28 +163,11 @@ const endDay = ref(null)
 const endYear = ref(null)
 const dailySpendingData = ref([])
 
-const months = [
-  { value: 1, label: 'January' },
-  { value: 2, label: 'February' },
-  { value: 3, label: 'March' },
-  { value: 4, label: 'April' },
-  { value: 5, label: 'May' },
-  { value: 6, label: 'June' },
-  { value: 7, label: 'July' },
-  { value: 8, label: 'August' },
-  { value: 9, label: 'September' },
-  { value: 10, label: 'October' },
-  { value: 11, label: 'November' },
-  { value: 12, label: 'December' },
-]
-
-const years = Array.from({ length: 60 }, (_, i) => new Date().getFullYear() - 20 + i)
-
-const monthOptions = computed(() => months.map((m) => ({ label: m.label, value: m.value })))
+const monthOptions = computed(() => constantsStore.getMonths)
+const years = computed(() => constantsStore.getYears())
 
 const currentProfile = computed(() => profileStore.currentProfile)
 const allProfiles = computed(() => profileStore.profiles || [])
-const selectedScenario = computed(() => scenariosStore.selectedScenario)
 const customScenarios = computed(() => scenariosStore.customScenarios)
 const filteredEvents = computed(() => eventsStore.filteredEvents)
 
@@ -239,8 +248,18 @@ async function updateFilteredData() {
     initializeDateRangeToCurrentMonth()
   }
 
-  const startDate = new Date(Date.UTC(startYear.value, startMonth.value - 1, startDay.value))
-  const endDate = new Date(Date.UTC(endYear.value, endMonth.value - 1, endDay.value))
+  // Ensure values are numbers (defensive check)
+  const startMonthNum =
+    typeof startMonth.value === 'number' ? startMonth.value : parseInt(startMonth.value)
+  const startDayNum = typeof startDay.value === 'number' ? startDay.value : parseInt(startDay.value)
+  const startYearNum =
+    typeof startYear.value === 'number' ? startYear.value : parseInt(startYear.value)
+  const endMonthNum = typeof endMonth.value === 'number' ? endMonth.value : parseInt(endMonth.value)
+  const endDayNum = typeof endDay.value === 'number' ? endDay.value : parseInt(endDay.value)
+  const endYearNum = typeof endYear.value === 'number' ? endYear.value : parseInt(endYear.value)
+
+  const startDate = new Date(Date.UTC(startYearNum, startMonthNum - 1, startDayNum))
+  const endDate = new Date(Date.UTC(endYearNum, endMonthNum - 1, endDayNum))
   await eventsStore.fetchEventsForDateRange(startDate, endDate)
   await updateScenarioData()
 }
@@ -288,13 +307,6 @@ function calculateDailySpending() {
 }
 
 async function getAllActiveScenarioEvents() {
-  const allEvents = []
-  const seenEvents = new Set()
-
-  if (!currentProfile.value) return allEvents
-
-  const profileID = currentProfile.value.id
-
   let startDate, endDate
   if (hasDateRangeFilter()) {
     startDate = new Date(Date.UTC(startYear.value, startMonth.value - 1, startDay.value))
@@ -306,115 +318,11 @@ async function getAllActiveScenarioEvents() {
     endDate = new Date(currentYear, currentMonth + 1, 0)
   }
 
-  try {
-    for (const scenarioId of activeScenarios.value) {
-      const actualScenarioId = scenarioId === 'default' ? selectedScenario.value?.id : scenarioId
-      if (!actualScenarioId) continue
-
-      const monthsToFetch = []
-      const startYear = startDate.getUTCFullYear()
-      const startMonth = startDate.getUTCMonth()
-      const endYear = endDate.getUTCFullYear()
-      const endMonth = endDate.getUTCMonth()
-
-      let currentYear = startYear
-      let currentMonth = startMonth
-
-      while (currentYear < endYear || (currentYear === endYear && currentMonth <= endMonth)) {
-        monthsToFetch.push({ year: currentYear, month: currentMonth })
-        currentMonth++
-        if (currentMonth > 11) {
-          currentMonth = 0
-          currentYear++
-        }
-      }
-
-      for (const { year, month } of monthsToFetch) {
-        const response = await axios.get(
-          `${getAPIURL()}/api/scenario/get-events-for-scenario-for-month`,
-          {
-            params: {
-              scenarioID: actualScenarioId,
-              profileID,
-              month: month,
-              year: year,
-            },
-          },
-        )
-
-        if (response.data && response.data.length > 0) {
-          response.data.forEach((eventData) => {
-            if (eventData.occurrences && eventData.occurrences.length > 0) {
-              eventData.occurrences.forEach((occurrence) => {
-                let occurrenceDate
-                if (typeof occurrence === 'string') {
-                  if (occurrence.includes('T')) {
-                    const datePart = occurrence.split('T')[0]
-                    const [year, month, day] = datePart.split('-').map(Number)
-                    occurrenceDate = new Date(Date.UTC(year, month - 1, day))
-                  } else {
-                    const [year, month, day] = occurrence.split('-').map(Number)
-                    occurrenceDate = new Date(Date.UTC(year, month - 1, day))
-                  }
-                } else {
-                  occurrenceDate = new Date(occurrence)
-                }
-
-                const occurrenceDateString = occurrenceDate.toISOString().split('T')[0]
-                const startDateString = startDate.toISOString().split('T')[0]
-                const endDateString = endDate.toISOString().split('T')[0]
-
-                if (
-                  occurrenceDateString >= startDateString &&
-                  occurrenceDateString <= endDateString
-                ) {
-                  const loanCategories = ['MORTGAGE', 'GENERIC_LOAN', 'AUTO_LOAN']
-                  const monthlyPayment =
-                    eventData.event.monthly_payment || eventData.event.monthlyPayment
-                  let displayAmount
-                  if (
-                    loanCategories.includes(eventData.event.category) &&
-                    monthlyPayment &&
-                    monthlyPayment > 0
-                  ) {
-                    if (
-                      eventData.event.category === 'MORTGAGE' &&
-                      eventData.event.escrow &&
-                      eventData.event.escrow > 0
-                    ) {
-                      displayAmount =
-                        parseFloat(monthlyPayment) + parseFloat(eventData.event.escrow)
-                    } else {
-                      displayAmount = monthlyPayment
-                    }
-                  } else {
-                    displayAmount = eventData.event.amount
-                  }
-
-                  const eventToAdd = {
-                    ...eventData.event,
-                    amount: displayAmount,
-                    date: occurrenceDateString,
-                  }
-
-                  const uniqueKey = `${eventData.event.id || eventData.event._id}-${occurrenceDateString}-${eventData.event.name || eventData.event.description || ''}`
-
-                  if (!seenEvents.has(uniqueKey)) {
-                    seenEvents.add(uniqueKey)
-                    allEvents.push(eventToAdd)
-                  }
-                }
-              })
-            }
-          })
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Error fetching events for active scenarios:', error)
-  }
-
-  return allEvents
+  return await eventsStore.getAllActiveScenarioEvents(
+    Array.from(activeScenarios.value),
+    startDate,
+    endDate,
+  )
 }
 
 async function toggleScenario(scenario) {
@@ -665,30 +573,23 @@ watch(currentProfile, async (newProfile) => {
   padding: 0.5rem 0;
 
   .text-subtitle2 {
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.9);
     font-weight: 500;
     margin-bottom: 0.75rem;
-    font-size: 0.85rem;
+    font-size: 0.95rem;
   }
 }
 
-:deep(.q-field) {
+.date-range-filters :deep(.q-select) {
   .q-field__control {
-    background: rgba(255, 255, 255, 0.05);
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.5);
     border-radius: 12px;
-    color: white;
-    min-height: 48px;
-  }
-
-  .q-field__native,
-  .q-field__input {
-    color: white;
-    padding: 0 0.75rem;
-  }
-
-  .q-field__label {
-    color: rgba(255, 255, 255, 0.7);
+    padding: 0.75rem 1rem;
+    min-height: 46px;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
   }
 
   .q-field__control:before,
@@ -696,18 +597,136 @@ watch(currentProfile, async (newProfile) => {
     display: none;
   }
 
+  .q-field__control:hover {
+    border-color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.12);
+  }
+
   &.q-field--focused .q-field__control {
-    border-color: rgba(168, 85, 247, 0.6);
+    border-color: #667eea;
+    background: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+  }
+
+  .q-field__native,
+  .q-field__input {
+    color: white;
+    font-size: 1rem;
+    padding: 0;
+    line-height: 1.5;
+  }
+
+  .q-field__label {
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .q-field__label--focused {
+    color: rgba(102, 126, 234, 0.9);
+  }
+
+  .q-icon {
+    color: rgba(255, 255, 255, 0.7);
+    transition: color 0.2s ease;
+  }
+
+  &:hover .q-icon {
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  &.q-field--focused .q-icon {
+    color: #667eea;
+  }
+}
+
+/* Date filter dropdown menu styling - Global override for all menus in date filters */
+.date-range-filters :deep(.q-select .q-menu),
+.date-range-filters :deep(.q-menu),
+:deep(.date-range-filters .q-menu) {
+  background: rgba(30, 30, 35, 0.98) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 2px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+  padding: 0.5rem !important;
+  max-height: 300px !important;
+  overflow-y: auto !important;
+  color: white !important;
+}
+
+.date-range-filters :deep(.q-select .q-menu .q-item),
+.date-range-filters :deep(.q-menu .q-item) {
+  color: rgba(255, 255, 255, 0.9) !important;
+  background: transparent !important;
+  border-radius: 8px !important;
+  margin: 2px 0 !important;
+  padding: 0.75rem 1rem !important;
+  min-height: 44px !important;
+  transition: all 0.2s ease !important;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: white !important;
+  }
+
+  &.q-item--active,
+  &.q-item--selected {
+    background: rgba(102, 126, 234, 0.2) !important;
+    color: #667eea !important;
+    font-weight: 600 !important;
+  }
+
+  &:active {
+    background: rgba(255, 255, 255, 0.15) !important;
+    transform: scale(0.98) !important;
+  }
+
+  .q-item__label,
+  .q-item__section--main {
+    color: inherit !important;
+    font-size: 1rem !important;
+  }
+}
+
+// Scrollbar styling for dropdown
+.date-range-filters :deep(.q-select .q-menu::-webkit-scrollbar),
+.date-range-filters :deep(.q-menu::-webkit-scrollbar) {
+  width: 6px !important;
+}
+
+.date-range-filters :deep(.q-select .q-menu::-webkit-scrollbar-track),
+.date-range-filters :deep(.q-menu::-webkit-scrollbar-track) {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-radius: 3px !important;
+}
+
+.date-range-filters :deep(.q-select .q-menu::-webkit-scrollbar-thumb),
+.date-range-filters :deep(.q-menu::-webkit-scrollbar-thumb) {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-radius: 3px !important;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.3) !important;
   }
 }
 
 // Mobile optimization for date filters
 @media (max-width: 600px) {
   .date-range-filters {
-    :deep(.q-field) {
+    .text-subtitle2 {
+      font-size: 0.85rem;
+      margin-bottom: 0.5rem;
+    }
+
+    :deep(.q-select) {
       .q-field__control {
         min-height: 44px;
+        padding: 0.625rem 0.875rem;
         border-radius: 10px;
+      }
+
+      .q-field__native,
+      .q-field__input {
+        font-size: 0.9rem;
       }
     }
   }

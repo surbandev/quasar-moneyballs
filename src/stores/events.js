@@ -295,10 +295,33 @@ export const useEventsStore = defineStore('events', () => {
 
     try {
       const url = `${getAPIURL()}/api/scenario/create-event`
-      const response = await axios.post(url, {
-        ...eventData,
-        profileID: profile.value.id,
-      })
+      // Build payload - ALWAYS include ALL 18 fields explicitly, use null for missing values
+      // This ensures the backend always receives all expected fields
+      const payload = {
+        active: 'active' in eventData ? eventData.active : true,
+        amount: eventData.amount,
+        calculatedEndDate: 'calculatedEndDate' in eventData && eventData.calculatedEndDate ? eventData.calculatedEndDate : eventData.endDate,
+        category: eventData.category,
+        description: 'description' in eventData ? eventData.description : '',
+        endDate: eventData.endDate,
+        escrow: 'escrow' in eventData ? eventData.escrow : null,
+        frequency: eventData.frequency,
+        interest: 'interest' in eventData ? eventData.interest : null,
+        loanTerm: 'loanTerm' in eventData ? eventData.loanTerm : null,
+        monthlyAmount: 'monthlyAmount' in eventData ? eventData.monthlyAmount : '',
+        monthlyPayment: 'monthlyPayment' in eventData ? eventData.monthlyPayment : null,
+        name: eventData.name,
+        principal: 'principal' in eventData ? eventData.principal : null,
+        profileID: eventData.profileID || profile.value.id,
+        scenarioID: eventData.scenarioID,
+        startDate: eventData.startDate,
+        type: eventData.type,
+      }
+      
+      // Log to verify all fields including nulls are present
+      console.log('Store createEvent - payload keys:', Object.keys(payload))
+      console.log('Store createEvent - payload (with nulls):', JSON.stringify(payload, null, 2))
+      const response = await axios.post(url, payload)
 
       await fetchEvents()
       await fetchEventsForMonthByScenario()
@@ -347,17 +370,41 @@ export const useEventsStore = defineStore('events', () => {
       throw new Error('No profile set for deleting event')
     }
 
+    if (!selectedScenario.value?.id) {
+      throw new Error('No scenario set for deleting event')
+    }
+
     loading.value = true
     error.value = null
 
     try {
+      // Backend function signature: removeEvent(scenarioID, profileID, eventID, userID)
       const url = `${getAPIURL()}/api/scenario/remove-event`
-      await axios.delete(url, {
-        data: {
-          eventID: eventId,
-          profileID: profile.value.id,
-        },
-      })
+      const payload = {
+        scenarioID: selectedScenario.value.id,
+        profileID: profile.value.id,
+        eventID: eventId,
+      }
+      
+      console.log('Delete event - URL:', url)
+      console.log('Delete event - Payload:', payload)
+      
+      // Try DELETE with request body first (matching scenario delete pattern)
+      try {
+        await axios.delete(url, {
+          data: payload,
+        })
+      } catch (deleteError) {
+        console.log('DELETE failed, trying POST:', deleteError.response?.status)
+        // If DELETE fails, try POST (some backends use POST for delete operations)
+        if (deleteError.response?.status === 404 || deleteError.response?.status === 405) {
+          await axios.post(url, payload)
+        } else {
+          // If it's not a 404/405, try query parameters
+          console.log('Trying query parameters format')
+          await axios.delete(`${url}?scenarioID=${selectedScenario.value.id}&profileID=${profile.value.id}&eventID=${eventId}`)
+        }
+      }
 
       await fetchEvents()
       await fetchEventsForMonthByScenario()
@@ -434,6 +481,145 @@ export const useEventsStore = defineStore('events', () => {
     filteredEvents.value = evts || []
   }
 
+  async function getAllActiveScenarioEvents(activeScenarioIds, startDate, endDate) {
+    const allEvents = []
+    const seenEvents = new Set()
+
+    if (!profile.value?.id) return allEvents
+
+    const profileID = profile.value.id
+
+    try {
+      for (const scenarioId of activeScenarioIds) {
+        const actualScenarioId =
+          scenarioId === 'default' ? selectedScenario.value?.id : scenarioId
+        if (!actualScenarioId) continue
+
+        const monthsToFetch = []
+        const startYear = startDate.getUTCFullYear()
+        const startMonth = startDate.getUTCMonth()
+        const endYear = endDate.getUTCFullYear()
+        const endMonth = endDate.getUTCMonth()
+
+        let currentYear = startYear
+        let currentMonth = startMonth
+
+        while (currentYear < endYear || (currentYear === endYear && currentMonth <= endMonth)) {
+          monthsToFetch.push({ year: currentYear, month: currentMonth })
+          currentMonth++
+          if (currentMonth > 11) {
+            currentMonth = 0
+            currentYear++
+          }
+        }
+
+        for (const { year, month } of monthsToFetch) {
+          const response = await axios.get(
+            `${getAPIURL()}/api/scenario/get-events-for-scenario-for-month`,
+            {
+              params: {
+                scenarioID: actualScenarioId,
+                profileID,
+                month: month,
+                year: year,
+              },
+            },
+          )
+
+          if (response.data && response.data.length > 0) {
+            response.data.forEach((eventData) => {
+              if (eventData.occurrences && eventData.occurrences.length > 0) {
+                eventData.occurrences.forEach((occurrence) => {
+                  let occurrenceDate
+                  if (typeof occurrence === 'string') {
+                    if (occurrence.includes('T')) {
+                      const datePart = occurrence.split('T')[0]
+                      const [year, month, day] = datePart.split('-').map(Number)
+                      occurrenceDate = new Date(Date.UTC(year, month - 1, day))
+                    } else {
+                      const [year, month, day] = occurrence.split('-').map(Number)
+                      occurrenceDate = new Date(Date.UTC(year, month - 1, day))
+                    }
+                  } else {
+                    occurrenceDate = new Date(occurrence)
+                  }
+
+                  const occurrenceDateString = occurrenceDate.toISOString().split('T')[0]
+                  const startDateString = startDate.toISOString().split('T')[0]
+                  const endDateString = endDate.toISOString().split('T')[0]
+
+                  if (
+                    occurrenceDateString >= startDateString &&
+                    occurrenceDateString <= endDateString
+                  ) {
+                    const loanCategories = ['MORTGAGE', 'GENERIC_LOAN', 'AUTO_LOAN']
+                    const monthlyPayment =
+                      eventData.event.monthly_payment || eventData.event.monthlyPayment
+                    let displayAmount
+                    if (
+                      loanCategories.includes(eventData.event.category) &&
+                      monthlyPayment &&
+                      monthlyPayment > 0
+                    ) {
+                      if (
+                        eventData.event.category === 'MORTGAGE' &&
+                        eventData.event.escrow &&
+                        eventData.event.escrow > 0
+                      ) {
+                        displayAmount =
+                          parseFloat(monthlyPayment) + parseFloat(eventData.event.escrow)
+                      } else {
+                        displayAmount = monthlyPayment
+                      }
+                    } else {
+                      displayAmount = eventData.event.amount
+                    }
+
+                    const eventToAdd = {
+                      ...eventData.event,
+                      amount: displayAmount,
+                      date: occurrenceDateString,
+                    }
+
+                    const uniqueKey = `${eventData.event.id || eventData.event._id}-${occurrenceDateString}-${eventData.event.name || eventData.event.description || ''}`
+
+                    if (!seenEvents.has(uniqueKey)) {
+                      seenEvents.add(uniqueKey)
+                      allEvents.push(eventToAdd)
+                    }
+                  }
+                })
+              }
+            })
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching events for active scenarios:', error)
+    }
+
+    return allEvents
+  }
+
+  async function calculateLoanDetails(loanData) {
+    loading.value = true
+    error.value = null
+
+    try {
+      const response = await axios.post(
+        `${getAPIURL()}/api/scenario/calculate-loan-details`,
+        loanData
+      )
+      return response.data
+    } catch (err) {
+      console.error('Error calculating loan details:', err)
+      error.value = err.message || 'Failed to calculate loan details'
+      throw err
+    } finally {
+      loading.value = false
+    }
+  }
+
   return {
     // State
     events,
@@ -472,5 +658,7 @@ export const useEventsStore = defineStore('events', () => {
     resetForNewUser,
     clearError,
     setFilteredEvents,
+    getAllActiveScenarioEvents,
+    calculateLoanDetails,
   }
 })

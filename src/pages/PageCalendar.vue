@@ -446,12 +446,11 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
-import axios from 'axios'
-import { getAPIURL } from '../js/api'
 import { currencyFormat } from '../js/utils'
 import { useCalendarStore } from '../stores/calendar'
 import { useScenariosStore } from '../stores/scenarios'
 import { useEventsStore } from '../stores/events'
+import { useConstantsStore } from '../stores/constants'
 
 const router = useRouter()
 const route = useRoute()
@@ -459,8 +458,9 @@ const $q = useQuasar()
 const calendarStore = useCalendarStore()
 const scenariosStore = useScenariosStore()
 const eventsStore = useEventsStore()
+const constantsStore = useConstantsStore()
 
-const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const daysOfWeek = computed(() => constantsStore.getDaysOfWeek)
 const isTransitioning = ref(false)
 const isInitializing = ref(false)
 const isSavingTransaction = ref(false)
@@ -485,72 +485,10 @@ const newTransaction = ref({
   escrow: null,
 })
 
-const categoryOptions = [
-  { label: 'Mortgage', value: 'MORTGAGE' },
-  { label: 'Rent', value: 'RENT' },
-  { label: 'Grocery', value: 'GROCERY' },
-  { label: 'Dining', value: 'DINING' },
-  { label: 'Entertainment', value: 'ENTERTAINMENT' },
-  { label: 'Utilities', value: 'UTILITY' },
-  { label: 'Subscription', value: 'SUBSCRIPTION' },
-  { label: 'Insurance', value: 'INSURANCE' },
-  { label: 'Generic Loan', value: 'GENERIC_LOAN' },
-  { label: 'Auto Loan', value: 'AUTO_LOAN' },
-  { label: 'Credit Card', value: 'CREDIT_CARD' },
-  { label: 'Phone', value: 'PHONE' },
-  { label: 'Savings', value: 'SAVINGS' },
-  { label: 'Primary Income', value: 'PRIMARY_INCOME' },
-  { label: 'Secondary Income', value: 'SECONDARY_INCOME' },
-  { label: 'Misc Income', value: 'MISC' },
-]
-
-const frequencyOptions = [
-  { label: 'Once', value: 'ONCE' },
-  { label: 'Daily', value: 'DAILY' },
-  { label: 'Weekly', value: 'WEEKLY' },
-  { label: 'Every Other Week', value: 'EVERY_OTHER_WEEK' },
-  { label: 'Monthly', value: 'MONTHLY' },
-  { label: 'Every Other Month', value: 'EVERY_OTHER_MONTH' },
-  { label: 'Yearly', value: 'YEARLY' },
-]
-
-const typeOptions = [
-  { label: 'Income', value: 'CREDIT' },
-  { label: 'Expense', value: 'DEBIT' },
-]
-
-const loanTermOptions = [
-  { label: '12 months (1 year)', value: '12' },
-  { label: '24 months (2 years)', value: '24' },
-  { label: '36 months (3 years)', value: '36' },
-  { label: '48 months (4 years)', value: '48' },
-  { label: '60 months (5 years)', value: '60' },
-  { label: '72 months (6 years)', value: '72' },
-  { label: '84 months (7 years)', value: '84' },
-  { label: '96 months (8 years)', value: '96' },
-  { label: '108 months (9 years)', value: '108' },
-  { label: '120 months (10 years)', value: '120' },
-  { label: '132 months (11 years)', value: '132' },
-  { label: '144 months (12 years)', value: '144' },
-  { label: '156 months (13 years)', value: '156' },
-  { label: '168 months (14 years)', value: '168' },
-  { label: '180 months (15 years)', value: '180' },
-  { label: '192 months (16 years)', value: '192' },
-  { label: '204 months (17 years)', value: '204' },
-  { label: '216 months (18 years)', value: '216' },
-  { label: '228 months (19 years)', value: '228' },
-  { label: '240 months (20 years)', value: '240' },
-  { label: '252 months (21 years)', value: '252' },
-  { label: '264 months (22 years)', value: '264' },
-  { label: '276 months (23 years)', value: '276' },
-  { label: '288 months (24 years)', value: '288' },
-  { label: '300 months (25 years)', value: '300' },
-  { label: '312 months (26 years)', value: '312' },
-  { label: '324 months (27 years)', value: '324' },
-  { label: '336 months (28 years)', value: '336' },
-  { label: '348 months (29 years)', value: '348' },
-  { label: '360 months (30 years)', value: '360' },
-]
+const categoryOptions = computed(() => constantsStore.getCategoryOptions)
+const frequencyOptions = computed(() => constantsStore.getFrequencyOptions)
+const typeOptions = computed(() => constantsStore.getTypeOptions)
+const loanTermOptions = computed(() => constantsStore.getLoanTermOptions)
 
 // Determine current view from query parameter
 const currentView = computed(() => {
@@ -723,20 +661,22 @@ async function calculateLoanDetails() {
   }
 
   try {
-    const response = await axios.post(`${getAPIURL()}/api/scenario/calculate-loan-details`, {
+    const loanData = {
       totalLoanAmount,
       additionalPrincipalPayment,
       interestRate,
       startDate: startDate.split('T')[0],
       loanTerm: parseInt(loanTerm),
-    })
+    }
 
-    if (response.data) {
-      loanCalculationPreview.value = response.data
+    const response = await eventsStore.calculateLoanDetails(loanData)
+
+    if (response) {
+      loanCalculationPreview.value = response
 
       // Auto-update the end date
-      if (response.data.endDate) {
-        newTransaction.value.endDate = new Date(response.data.endDate).toISOString().split('T')[0]
+      if (response.endDate) {
+        newTransaction.value.endDate = new Date(response.endDate).toISOString().split('T')[0]
       }
     }
   } catch (error) {
@@ -776,6 +716,7 @@ async function saveTransaction() {
       type: newTransaction.value.type,
       startDate: formattedStartDate,
       endDate: formattedEndDate,
+      calculatedEndDate: formattedEndDate, // Always set calculatedEndDate (defaults to endDate)
       scenarioID: newTransaction.value.scenarioID || selectedScenario.value.id,
       profileID: profile.value.id,
       active: true,

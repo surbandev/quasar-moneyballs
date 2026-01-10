@@ -269,32 +269,52 @@ input[type="date"]::-moz-calendar-picker-indicator {
 
 // Menu/Dropdown styling for dark theme
 .q-menu {
-  background: rgba(30, 30, 30, 0.98);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  background: rgba(30, 30, 35, 0.98) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 2px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+  color: white !important;
+  padding: 0.5rem !important;
 
   .q-item {
-    color: white;
-    border-radius: 8px;
-    margin: 4px;
+    color: rgba(255, 255, 255, 0.9) !important;
+    background: transparent !important;
+    border-radius: 8px !important;
+    margin: 2px 0 !important;
+    padding: 0.75rem 1rem !important;
+    min-height: 44px !important;
+    transition: all 0.2s ease !important;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.1) !important;
+      color: white !important;
     }
     
     &:active {
-      background: rgba(255, 255, 255, 0.15);
-      transform: scale(0.98);
+      background: rgba(255, 255, 255, 0.15) !important;
+      transform: scale(0.98) !important;
+    }
+
+    &.q-item--active,
+    &.q-item--selected {
+      background: rgba(102, 126, 234, 0.2) !important;
+      color: #667eea !important;
+      font-weight: 600 !important;
+    }
+
+    .q-item__label,
+    .q-item__section--main {
+      color: inherit !important;
+      font-size: 1rem !important;
     }
   }
   
   // Scenario menu override
   &.scenario-menu {
-    background: transparent;
-    border: none;
-    box-shadow: none;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
   }
 }
 
@@ -318,5 +338,122 @@ input[type="date"]::-moz-calendar-picker-indicator {
 .q-btn--unelevated.q-btn--standard {
   &.bg-primary {
     background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
+  }
+}
+
+// Global dialog styling for dark theme - target all possible dialog structures
+.q-dialog .q-dialog__inner .q-card,
+.q-dialog__inner .q-card,
+.dark-dialog .q-card,
+.dark-dialog,
+body .q-dialog .q-card,
+body .q-dialog__inner .q-card {
+  background: rgba(30, 30, 35, 0.98) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 2px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 16px !important;
+  color: white !important;
+  padding: 2rem !important;
+  min-width: 400px !important;
+  max-width: 500px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+
+  .q-card__section {
+    color: white !important;
+    padding: 0 !important;
+
+    &:first-child {
+      padding-bottom: 1rem !important;
+      margin-bottom: 1rem !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+    }
+  }
+
+  .q-dialog__title {
+    color: white !important;
+    font-size: 1.5rem !important;
+    font-weight: 600 !important;
+    margin: 0 0 1rem 0 !important;
+  }
+
+  .q-dialog__message {
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-size: 1rem !important;
+    line-height: 1.5 !important;
+    margin-bottom: 1.5rem !important;
+  }
+
+  .q-dialog__actions {
+    display: flex !important;
+    gap: 1rem !important;
+    justify-content: flex-end !important;
+    padding-top: 1rem !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1) !important;
+    margin-top: 0 !important;
+
+    .q-btn {
+      padding: 0.75rem 1.5rem !important;
+      border-radius: 12px !important;
+      font-size: 1rem !important;
+      font-weight: 500 !important;
+      transition: all 0.3s ease !important;
+      min-width: 100px !important;
+      text-transform: none !important;
+
+      &.q-btn--flat {
+        background: rgba(255, 255, 255, 0.1) !important;
+        border: 2px solid rgba(255, 255, 255, 0.3) !important;
+        color: white !important;
+
+        &:hover {
+          background: rgba(255, 255, 255, 0.15) !important;
+          border-color: rgba(255, 255, 255, 0.5) !important;
+          transform: translateY(-2px) !important;
+        }
+      }
+
+      &:not(.q-btn--flat) {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        border: none !important;
+        color: white !important;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3) !important;
+
+        &:hover {
+          transform: translateY(-3px) !important;
+          box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4) !important;
+        }
+      }
+    }
+  }
+}
+
+// Mobile responsive dialog styling
+@media (max-width: 768px) {
+  .q-dialog {
+    .q-dialog__inner {
+      padding: 1rem !important;
+
+      .q-card {
+        min-width: calc(100vw - 2rem) !important;
+        max-width: calc(100vw - 2rem) !important;
+        padding: 1.5rem !important;
+
+        .q-dialog__title {
+          font-size: 1.25rem !important;
+        }
+
+        .q-dialog__message {
+          font-size: 0.95rem !important;
+        }
+
+        .q-dialog__actions {
+          flex-direction: column-reverse !important;
+
+          .q-btn {
+            width: 100% !important;
+          }
+        }
+      }
+    }
   }
 }

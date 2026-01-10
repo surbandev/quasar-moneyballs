@@ -116,13 +116,13 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuasar } from 'quasar'
-import axios from 'axios'
 import { useProfileStore } from '../stores/profile'
-import { getAPIURL } from '../js/api'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const $q = useQuasar()
 const profileStore = useProfileStore()
+const authStore = useAuthStore()
 
 const username = ref('')
 const password = ref('')
@@ -175,17 +175,11 @@ async function handleLogin() {
   clearPasswordError()
 
   try {
-    const response = await axios.post(`${getAPIURL()}/api/user/login`, {
-      username: username.value.trim(),
-      password: password.value,
-    })
-
-    localStorage.setItem('token', response.data.token)
-    localStorage.setItem('userID', response.data.userID)
+    await authStore.login(username.value.trim(), password.value)
 
     try {
       await profileStore.fetchProfiles()
-      const userID = response.data.userID
+      const userID = authStore.getUserID
       const userProfile = profileStore.profiles.find((p) => p.id == userID || p._id == userID)
       if (userProfile) {
         profileStore.setCurrentProfile(userProfile)
@@ -194,7 +188,7 @@ async function handleLogin() {
       }
     } catch (e) {
       console.error('Error setting current profile:', e)
-      profileStore.setCurrentProfile({ id: response.data.userID })
+      profileStore.setCurrentProfile({ id: authStore.getUserID })
     }
 
     router.push('/dashboard')
